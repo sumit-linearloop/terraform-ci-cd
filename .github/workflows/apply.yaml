@@ -1,0 +1,58 @@
+name: Terraform DigitalOcean Apply/Destroy Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Choose action (apply or destroy)'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0  # Adjust version if needed
+
+    - name: Set DigitalOcean Token
+      env:
+        DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      run: |
+        echo "machine api.digitalocean.com login ${DIGITALOCEAN_TOKEN}" > ~/.netrc
+        chmod 600 ~/.netrc  # Ensure permissions are correct
+
+    - name: Initialize Terraform
+      run: terraform init
+
+    - name: Terraform Plan (Apply)
+      if: ${{ github.event.inputs.action == 'apply' }}
+      run: terraform plan -out=tfplan
+
+    - name: Approve and Apply Plan
+      if: ${{ github.event.inputs.action == 'apply' }}
+      run: |
+        echo "Waiting for manual approval to apply..."
+        sleep 30  # Simulate wait, adjust or remove as needed
+        terraform apply tfplan
+
+    - name: Terraform Plan (Destroy)
+      if: ${{ github.event.inputs.action == 'destroy' }}
+      run: terraform plan -destroy -out=tfplan
+
+    - name: Approve and Destroy
+      if: ${{ github.event.inputs.action == 'destroy' }}
+      run: |
+        echo "Waiting for manual approval to destroy..."
+        sleep 30  # Simulate wait, adjust or remove as needed
+        terraform apply -destroy tfplan
