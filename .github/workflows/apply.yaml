@@ -51,17 +51,17 @@ jobs:
 
     - name: Terraform Plan (Apply)
       if: ${{ github.event.inputs.action == 'apply' }}
-      run: terraform plan -out=tfplan
+      run: terraform plan 
 
     - name: Approve and Apply Plan
       if: ${{ github.event.inputs.action == 'apply' }}
       run: |
         echo "Applying Terraform plan with auto-approve... "
-        terraform apply --auto-approve tfplan
+        terraform apply --auto-approve -
 
     - name: Terraform Plan (Destroy)
       if: ${{ github.event.inputs.action == 'destroy' }}
-      run: terraform plan -destroy -out=tfplan
+      run: terraform plan -destroy 
 
     - name: Approve and Destroy
       if: ${{ github.event.inputs.action == 'destroy' }}
