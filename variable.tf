@@ -113,3 +113,16 @@ variable "github_secret" {
   description = "GitHub secret for additional operations"
   type        = string
 }
+
+
+variable "dragonfly_count" {
+  description = "Count of Dragonfly instances"
+  type        = number
+  default     = 1 # Or any appropriate default value
+}
+
+variable "firefly_count" {
+  description = "Count of Firefly instances"
+  type        = number
+  default     = 1 # Or any appropriate default value
+}
