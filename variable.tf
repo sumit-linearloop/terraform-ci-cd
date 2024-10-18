@@ -4,9 +4,11 @@ variable "do_token" {
 }
 
 variable "ssh_public_key_path" {
-  description = "Path to the SSH public key"
+  description = "Path to the SSH public key file"
   type        = string
+  default     = "D:/ssh/sumit.pub"  # Adjust this if necessary
 }
+
 
 variable "ssh_private_key_path" {
   description = "Path to the SSH private key"

@@ -46,7 +46,7 @@ chmod 600 ~/.ssh/id_rsa
 echo "Setup AWS CLI..."
 aws configure set aws_access_key_id "${AWS_ACCESS_KEY}"
 aws configure set aws_secret_access_key "${AWS_SECRET_KEY}"
-aws configure set region "${AWS_REGION}"
+aws configure set region ap-south-1
 
 # Install NVM
 echo "Installing NVM..."
