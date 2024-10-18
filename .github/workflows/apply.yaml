@@ -26,7 +26,11 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        run: terraform plan -out=tfplan -var "do_token=${{ secrets.DO_TOKEN }}" -var "ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var "dragonfly_count=${{ secrets.DRAGONFLY_COUNT }}" -var "firefly_count=${{ secrets.FIREFLY_COUNT }}"
+        run: terraform plan -out=tfplan \
+          -var "do_token=${{ secrets.DO_TOKEN }}" \
+          -var "ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+          -var "dragonfly_count=${{ secrets.DRAGONFLY_COUNT }}" \
+          -var "firefly_count=${{ secrets.FIREFLY_COUNT }}"
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
