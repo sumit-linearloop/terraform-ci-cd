@@ -3,87 +3,51 @@ name: Terraform CI/CD
 on:
   push:
     branches:
-      - main
-      
+      - main  # or the branch you want to trigger the action
+
 jobs:
   terraform:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: ${{ secrets.NODE_VERSION }}
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v2.0.0
+      with:
+        terraform_version: 1.5.0  # Use the desired Terraform version
 
-      - name: Load .env file
-        run: |
-          if [ -f .env ]; then
-            export $(cat .env | xargs)
-          fi
+    - name: Configure Terraform variables
+      run: |
+        echo "do_token = '${{ secrets.DO_TOKEN }}'" >> terraform.tfvars
+        echo "ssh_public_key_path = '${{ secrets.SSH_PUBLIC_KEY_PATH }}'" >> terraform.tfvars
+        echo "ssh_private_key_path = '${{ secrets.SSH_PRIVATE_KEY_PATH }}'" >> terraform.tfvars
+        echo "droplet_image = 'ubuntu-24-04-x64'" >> terraform.tfvars
+        echo "droplet_name = 'sumit'" >> terraform.tfvars
+        echo "droplet_region = 'blr1'" >> terraform.tfvars
+        echo "droplet_size = 's-1vcpu-1gb'" >> terraform.tfvars
+        echo "aws_access_key = '${{ secrets.AWS_ACCESS_KEY }}'" >> terraform.tfvars
+        echo "aws_secret_key = '${{ secrets.AWS_SECRET_KEY }}'" >> terraform.tfvars
+        echo "aws_region = 'ap-south-1'" >> terraform.tfvars
+        echo "node_version = '18'" >> terraform.tfvars
+        echo "dragonfly_repo = 'git@github.com:sumit-linearloop/digitalocean-api.git'" >> terraform.tfvars
+        echo "dragonfly_port = 3000" >> terraform.tfvars
+        echo "dragonfly_domain = 'api'" >> terraform.tfvars
+        echo "dragonfly_secret = 'master'" >> terraform.tfvars
+        echo "dragonfly_branch = 'master'" >> terraform.tfvars
+        echo "firefly_repo = 'git@github.com:sumit-linearloop/digitalocean-api.git'" >> terraform.tfvars
+        echo "firefly_port = 1500" >> terraform.tfvars
+        echo "firefly_domain = 'dev'" >> terraform.tfvars
+        echo "firefly_secret = 'dev'" >> terraform.tfvars
+        echo "firefly_branch = 'DEV'" >> terraform.tfvars
+        echo "github_token = '${{ secrets.GITHUB_TOKEN }}'" >> terraform.tfvars
 
-      - name: Log variable names
-        run: |
-          echo "DO_TOKEN: [REDACTED]"
-          echo "SSH_PUBLIC_KEY: [REDACTED]"
-          echo "DRAGONFLY_COUNT: [REDACTED]"
-          echo "FIREFLY_COUNT: [REDACTED]"
-          echo "APP_ACTION: [REDACTED]"
+    - name: Terraform Init
+      run: terraform init
 
-      - name: Set environment variables
-        run: |
-          echo "DO_TOKEN=${{ secrets.DO_TOKEN }}" >> $GITHUB_ENV
-          echo "SSH_PUBLIC_KEY_PATH=${{ secrets.SSH_PUBLIC_KEY_PATH }}" >> $GITHUB_ENV
-          echo "DRAGONFLY_REPO=${{ secrets.DRAGONFLY_REPO }}" >> $GITHUB_ENV
-          echo "DRAGONFLY_PORT=${{ secrets.DRAGONFLY_PORT }}" >> $GITHUB_ENV
-          echo "DRAGONFLY_DOMAIN=${{ secrets.DRAGONFLY_DOMAIN }}" >> $GITHUB_ENV
-          echo "DRAGONFLY_SECRET=${{ secrets.DRAGONFLY_SECRET }}" >> $GITHUB_ENV
-          echo "DRAGONFLY_BRANCH=${{ secrets.DRAGONFLY_BRANCH }}" >> $GITHUB_ENV
-          echo "FIREFLY_REPO=${{ secrets.FIREFLY_REPO }}" >> $GITHUB_ENV
-          echo "FIREFLY_PORT=${{ secrets.FIREFLY_PORT }}" >> $GITHUB_ENV
-          echo "FIREFLY_DOMAIN=${{ secrets.FIREFLY_DOMAIN }}" >> $GITHUB_ENV
-          echo "FIREFLY_SECRET=${{ secrets.FIREFLY_SECRET }}" >> $GITHUB_ENV
-          echo "FIREFLY_BRANCH=${{ secrets.FIREFLY_BRANCH }}" >> $GITHUB_ENV
-          echo "AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}" >> $GITHUB_ENV
-          echo "AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}" >> $GITHUB_ENV
-          echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> $GITHUB_ENV
-          echo "DROPLET_IMAGE=${{ secrets.DROPLET_IMAGE }}" >> $GITHUB_ENV
-          echo "DROPLET_NAME=${{ secrets.DROPLET_NAME }}" >> $GITHUB_ENV
-          echo "DROPLET_REGION=${{ secrets.DROPLET_REGION }}" >> $GITHUB_ENV
-          echo "DROPLET_SIZE=${{ secrets.DROPLET_SIZE }}" >> $GITHUB_ENV
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan
 
-      - name: Terraform Init
-        run: |
-          terraform init
-
-      - name: Terraform Plan
-        id: plan
-        run: |
-          terraform plan -out=tfplan \
-          -var "do_token=${{ secrets.DO_TOKEN }}" \
-          -var "ssh_public_key=${{ secrets.SSH_PUBLIC_KEY_PATH }}" \
-          -var "dragonfly_repo=${{ secrets.DRAGONFLY_REPO }}" \
-          -var "dragonfly_port=${{ secrets.DRAGONFLY_PORT }}" \
-          -var "dragonfly_domain=${{ secrets.DRAGONFLY_DOMAIN }}" \
-          -var "dragonfly_secret=${{ secrets.DRAGONFLY_SECRET }}" \
-          -var "dragonfly_branch=${{ secrets.DRAGONFLY_BRANCH }}" \
-          -var "firefly_repo=${{ secrets.FIREFLY_REPO }}" \
-          -var "firefly_port=${{ secrets.FIREFLY_PORT }}" \
-          -var "firefly_domain=${{ secrets.FIREFLY_DOMAIN }}" \
-          -var "firefly_secret=${{ secrets.FIREFLY_SECRET }}" \
-          -var "firefly_branch=${{ secrets.FIREFLY_BRANCH }}" \
-          -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
-          -var "aws_secret_key=${{ secrets.AWS_SECRET_KEY }}" \
-          -var "aws_region=${{ secrets.AWS_REGION }}" \
-          -var "node_version=${{ secrets.NODE_VERSION }}" 
-
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
-        run: |
-          terraform apply tfplan
-
-      - name: Clean up
-        run: |
-          terraform destroy -auto-approve
+    - name: Terraform Apply
+      run: terraform apply -auto-approve tfplan
