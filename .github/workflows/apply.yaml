@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-
+      
 jobs:
   terraform:
     runs-on: ubuntu-latest
@@ -13,26 +13,77 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v1
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
         with:
-          terraform_version: 1.9.0
+          node-version: ${{ secrets.NODE_VERSION }}
+
+      - name: Load .env file
+        run: |
+          if [ -f .env ]; then
+            export $(cat .env | xargs)
+          fi
+
+      - name: Log variable names
+        run: |
+          echo "DO_TOKEN: [REDACTED]"
+          echo "SSH_PUBLIC_KEY: [REDACTED]"
+          echo "DRAGONFLY_COUNT: [REDACTED]"
+          echo "FIREFLY_COUNT: [REDACTED]"
+          echo "APP_ACTION: [REDACTED]"
+
+      - name: Set environment variables
+        run: |
+          echo "DO_TOKEN=${{ secrets.DO_TOKEN }}" >> $GITHUB_ENV
+          echo "SSH_PUBLIC_KEY_PATH=${{ secrets.SSH_PUBLIC_KEY_PATH }}" >> $GITHUB_ENV
+          echo "DRAGONFLY_REPO=${{ secrets.DRAGONFLY_REPO }}" >> $GITHUB_ENV
+          echo "DRAGONFLY_PORT=${{ secrets.DRAGONFLY_PORT }}" >> $GITHUB_ENV
+          echo "DRAGONFLY_DOMAIN=${{ secrets.DRAGONFLY_DOMAIN }}" >> $GITHUB_ENV
+          echo "DRAGONFLY_SECRET=${{ secrets.DRAGONFLY_SECRET }}" >> $GITHUB_ENV
+          echo "DRAGONFLY_BRANCH=${{ secrets.DRAGONFLY_BRANCH }}" >> $GITHUB_ENV
+          echo "FIREFLY_REPO=${{ secrets.FIREFLY_REPO }}" >> $GITHUB_ENV
+          echo "FIREFLY_PORT=${{ secrets.FIREFLY_PORT }}" >> $GITHUB_ENV
+          echo "FIREFLY_DOMAIN=${{ secrets.FIREFLY_DOMAIN }}" >> $GITHUB_ENV
+          echo "FIREFLY_SECRET=${{ secrets.FIREFLY_SECRET }}" >> $GITHUB_ENV
+          echo "FIREFLY_BRANCH=${{ secrets.FIREFLY_BRANCH }}" >> $GITHUB_ENV
+          echo "AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}" >> $GITHUB_ENV
+          echo "AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}" >> $GITHUB_ENV
+          echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> $GITHUB_ENV
+          echo "DROPLET_IMAGE=${{ secrets.DROPLET_IMAGE }}" >> $GITHUB_ENV
+          echo "DROPLET_NAME=${{ secrets.DROPLET_NAME }}" >> $GITHUB_ENV
+          echo "DROPLET_REGION=${{ secrets.DROPLET_REGION }}" >> $GITHUB_ENV
+          echo "DROPLET_SIZE=${{ secrets.DROPLET_SIZE }}" >> $GITHUB_ENV
 
       - name: Terraform Init
-        run: terraform init
-
-      - name: Terraform Validate
-        run: terraform validate
+        run: |
+          terraform init
 
       - name: Terraform Plan
         id: plan
         run: |
           terraform plan -out=tfplan \
           -var "do_token=${{ secrets.DO_TOKEN }}" \
-          -var "ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
-          -var "dragonfly_count=${{ secrets.DRAGONFLY_COUNT }}" \
-          -var "firefly_count=${{ secrets.FIREFLY_COUNT }}" \
-          -var "app_action=${{ secrets.APP_ACTION }}"
+          -var "ssh_public_key=${{ secrets.SSH_PUBLIC_KEY_PATH }}" \
+          -var "dragonfly_repo=${{ secrets.DRAGONFLY_REPO }}" \
+          -var "dragonfly_port=${{ secrets.DRAGONFLY_PORT }}" \
+          -var "dragonfly_domain=${{ secrets.DRAGONFLY_DOMAIN }}" \
+          -var "dragonfly_secret=${{ secrets.DRAGONFLY_SECRET }}" \
+          -var "dragonfly_branch=${{ secrets.DRAGONFLY_BRANCH }}" \
+          -var "firefly_repo=${{ secrets.FIREFLY_REPO }}" \
+          -var "firefly_port=${{ secrets.FIREFLY_PORT }}" \
+          -var "firefly_domain=${{ secrets.FIREFLY_DOMAIN }}" \
+          -var "firefly_secret=${{ secrets.FIREFLY_SECRET }}" \
+          -var "firefly_branch=${{ secrets.FIREFLY_BRANCH }}" \
+          -var "aws_access_key=${{ secrets.AWS_ACCESS_KEY }}" \
+          -var "aws_secret_key=${{ secrets.AWS_SECRET_KEY }}" \
+          -var "aws_region=${{ secrets.AWS_REGION }}" \
+          -var "node_version=${{ secrets.NODE_VERSION }}" 
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+        if: github.ref == 'refs/heads/main'
+        run: |
+          terraform apply tfplan
+
+      - name: Clean up
+        run: |
+          terraform destroy -auto-approve
