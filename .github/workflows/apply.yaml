@@ -37,7 +37,7 @@ jobs:
       run: |
         aws configure set aws_access_key_id ${AWS_ACCESS_KEY_ID}
         aws configure set aws_secret_access_key ${AWS_SECRET_ACCESS_KEY}
-        aws configure set default.region us-east-1  # Adjust region as needed
+        aws configure set default.region ap-south-1  
 
     - name: Set DigitalOcean Token
       env:
@@ -51,28 +51,20 @@ jobs:
 
     - name: Terraform Plan (Apply)
       if: ${{ github.event.inputs.action == 'apply' }}
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}  # Pass AWS credentials to Terraform
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: terraform plan -out=tfplan
 
     - name: Approve and Apply Plan
       if: ${{ github.event.inputs.action == 'apply' }}
       run: |
-        echo "Waiting for manual approval to apply..."
-        sleep 30  # Simulate wait, adjust or remove as needed
-        terraform apply tfplan
+        echo "Applying Terraform plan with auto-approve... "
+        terraform apply --auto-approve tfplan
 
     - name: Terraform Plan (Destroy)
       if: ${{ github.event.inputs.action == 'destroy' }}
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}  # Pass AWS credentials to Terraform
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: terraform plan -destroy -out=tfplan
 
     - name: Approve and Destroy
       if: ${{ github.event.inputs.action == 'destroy' }}
       run: |
-        echo "Waiting for manual approval to destroy..."
-        sleep 30  # Simulate wait, adjust or remove as needed
-        terraform apply -destroy tfplan
+        echo "Destroying Terraform resources with auto-approve... "
+        terraform destroy --auto-approve tfplan
