@@ -3,22 +3,21 @@ name: Terraform CI/CD Pipeline
 on:
   push:
     branches:
-      - main  # Adjust this branch as needed
+      - main
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout Repository
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # Step 2: Install AWS CLI
       - name: Install AWS CLI
-        run: sudo apt-get update && sudo apt-get install -y awscli
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y awscli
 
-      # Step 3: Configure AWS Credentials
       - name: Configure AWS CLI
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
@@ -28,27 +27,25 @@ jobs:
           aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
           aws configure set region ap-south-1
 
-      # Step 4: Download terraform.tfvars from S3
       - name: Download terraform.tfvars from S3
         run: |
           mkdir -p terraform
           aws s3 cp s3://sumit-cli/terraform.tfvars terraform/terraform.tfvars
 
-      # Step 5: Setup Terraform CLI
+      - name: List Terraform Directory
+        run: ls -la terraform
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
 
-      # Step 6: Initialize Terraform
       - name: Terraform Init
         run: terraform -chdir=terraform init
 
-      # Step 7: Plan Terraform Changes
       - name: Terraform Plan
-        run: terraform -chdir=terraform plan -var-file=terraform.tfvars
+        run: terraform -chdir=terraform plan -var-file=terraform/terraform.tfvars
 
-      # Step 8: Apply Terraform Changes (Optional)
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'  # Apply only on main branch
-        run: terraform -chdir=terraform apply -auto-approve -var-file=terraform.tfvars
+        if: github.ref == 'refs/heads/main'
+        run: terraform -chdir=terraform apply -auto-approve -var-file=terraform/terraform.tfvars
