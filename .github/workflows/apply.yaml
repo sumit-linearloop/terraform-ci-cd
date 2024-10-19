@@ -1,105 +1,54 @@
-name: 'Terraform CI/CD'
+name: Terraform CI/CD Pipeline
 
 on:
   push:
     branches:
-      - main
-  pull_request:
+      - main  # Adjust this branch as needed
 
 jobs:
   terraform:
-    name: 'Terraform'
     runs-on: ubuntu-latest
 
-    env:
-      TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-      TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
-      TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
-      TF_VAR_github_token: ${{ secrets.GITHUB_TOKEN }}
-      TF_VAR_dragonfly_secret: ${{ secrets.DRAGONFLY_SECRET }}
-      TF_VAR_firefly_secret: ${{ secrets.FIREFLY_SECRET }}
-      TF_VAR_droplet_image: ${{ vars.DROPLET_IMAGE }}
-      TF_VAR_droplet_name: ${{ vars.DROPLET_NAME }}
-      TF_VAR_droplet_region: ${{ vars.DROPLET_REGION }}
-      TF_VAR_droplet_size: ${{ vars.DROPLET_SIZE }}
-      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
-      TF_VAR_node_version: ${{ vars.NODE_VERSION }}
-      TF_VAR_dragonfly_repo: ${{ vars.DRAGONFLY_REPO }}
-      TF_VAR_dragonfly_port: ${{ vars.DRAGONFLY_PORT }}
-      TF_VAR_dragonfly_domain: ${{ vars.DRAGONFLY_DOMAIN }}
-      TF_VAR_dragonfly_branch: ${{ vars.DRAGONFLY_BRANCH }}
-      TF_VAR_firefly_repo: ${{ vars.FIREFLY_REPO }}
-      TF_VAR_firefly_port: ${{ vars.FIREFLY_PORT }}
-      TF_VAR_firefly_domain: ${{ vars.FIREFLY_DOMAIN }}
-      TF_VAR_firefly_branch: ${{ vars.FIREFLY_BRANCH }}
-
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
+      # Step 1: Checkout Repository
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v2
-      with:
-        terraform_version: 1.5.0
+      # Step 2: Install AWS CLI
+      - name: Install AWS CLI
+        run: sudo apt-get update && sudo apt-get install -y awscli
 
-    - name: Terraform Format
-      id: fmt
-      run: terraform fmt -check
-      continue-on-error: true
+      # Step 3: Configure AWS Credentials
+      - name: Configure AWS CLI
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+        run: |
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set region ap-south-1
 
-    - name: Terraform Init
-      id: init
-      run: terraform init
+      # Step 4: Download terraform.tfvars from S3
+      - name: Download terraform.tfvars from S3
+        run: |
+          mkdir -p terraform
+          aws s3 cp s3://sumit-cli/terraform.tfvars terraform/terraform.tfvars
 
-    - name: Terraform Validate
-      id: validate
-      run: terraform validate -no-color
+      # Step 5: Setup Terraform CLI
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
 
-    - name: Terraform Plan
-      id: plan
-      if: github.event_name == 'pull_request'
-      run: |
-        terraform plan -no-color > tfplan.txt
-        cat tfplan.txt
-      continue-on-error: true
+      # Step 6: Initialize Terraform
+      - name: Terraform Init
+        run: terraform -chdir=terraform init
 
-    - name: Update Pull Request with Plan
-      uses: actions/github-script@v6
-      if: github.event_name == 'pull_request'
-      env:
-        PLAN: ${{ steps.plan.outputs.stdout }}
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        script: |
-          const fs = require('fs');
-          const planOutput = fs.readFileSync('tfplan.txt', 'utf8');
-          const output = `
-          #### Terraform Format and Style 🖌: \`${{ steps.fmt.outcome }}\`
-          #### Terraform Initialization ⚙️: \`${{ steps.init.outcome }}\`
-          #### Terraform Plan 📖: \`${{ steps.plan.outcome }}\`
-          #### Terraform Validation 🤖: \`${{ steps.validate.outcome }}\`
+      # Step 7: Plan Terraform Changes
+      - name: Terraform Plan
+        run: terraform -chdir=terraform plan -var-file=terraform.tfvars
 
-          <details><summary>Show Plan</summary>
-
-          \`\`\`
-          ${planOutput}
-          \`\`\`
-
-          </details>
-
-          *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: output
-          });
-
-    - name: Terraform Plan Status
-      if: steps.plan.outcome == 'failure'
-      run: exit 1
-
-    - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: terraform apply -auto-approve
+      # Step 8: Apply Terraform Changes (Optional)
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'  # Apply only on main branch
+        run: terraform -chdir=terraform apply -auto-approve -var-file=terraform.tfvars
