@@ -1,53 +1,74 @@
-name: Terraform CI/CD
+name: 'Terraform CI/CD'
 
 on:
   push:
     branches:
-      - main  # or the branch you want to trigger the action
+      - main
+  pull_request:
 
 jobs:
   terraform:
+    name: 'Terraform'
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v2
 
-    - name: Set up Terraform
-      uses: hashicorp/setup-terraform@v2.0.0
-      with:
-        terraform_version: 1.5.0  # Use the desired Terraform version
-
-    - name: Configure Terraform variables
-      run: |
-        echo "do_token = '${{ secrets.DO_TOKEN }}'" >> terraform.tfvars
-        echo "ssh_public_key_path = '${{ secrets.SSH_PUBLIC_KEY_PATH }}'" >> terraform.tfvars
-        echo "ssh_private_key_path = '${{ secrets.SSH_PRIVATE_KEY_PATH }}'" >> terraform.tfvars
-        echo "droplet_image = 'ubuntu-24-04-x64'" >> terraform.tfvars
-        echo "droplet_name = 'sumit'" >> terraform.tfvars
-        echo "droplet_region = 'blr1'" >> terraform.tfvars
-        echo "droplet_size = 's-1vcpu-1gb'" >> terraform.tfvars
-        echo "aws_access_key = '${{ secrets.AWS_ACCESS_KEY }}'" >> terraform.tfvars
-        echo "aws_secret_key = '${{ secrets.AWS_SECRET_KEY }}'" >> terraform.tfvars
-        echo "aws_region = 'ap-south-1'" >> terraform.tfvars
-        echo "node_version = '18'" >> terraform.tfvars
-        echo "dragonfly_repo = 'git@github.com:sumit-linearloop/digitalocean-api.git'" >> terraform.tfvars
-        echo "dragonfly_port = 3000" >> terraform.tfvars
-        echo "dragonfly_domain = 'api'" >> terraform.tfvars
-        echo "dragonfly_secret = 'master'" >> terraform.tfvars
-        echo "dragonfly_branch = 'master'" >> terraform.tfvars
-        echo "firefly_repo = 'git@github.com:sumit-linearloop/digitalocean-api.git'" >> terraform.tfvars
-        echo "firefly_port = 1500" >> terraform.tfvars
-        echo "firefly_domain = 'dev'" >> terraform.tfvars
-        echo "firefly_secret = 'dev'" >> terraform.tfvars
-        echo "firefly_branch = 'DEV'" >> terraform.tfvars
-        echo "github_token = '${{ secrets.GITHUB_TOKEN }}'" >> terraform.tfvars
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
 
     - name: Terraform Init
       run: terraform init
 
+    - name: Terraform Format
+      run: terraform fmt -check
+
     - name: Terraform Plan
-      run: terraform plan -out=tfplan
+      run: terraform plan -input=false
+      env:
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+        TF_VAR_droplet_image: ${{ secrets.DROPLET_IMAGE }}
+        TF_VAR_droplet_name: ${{ secrets.DROPLET_NAME }}
+        TF_VAR_droplet_region: ${{ secrets.DROPLET_REGION }}
+        TF_VAR_droplet_size: ${{ secrets.DROPLET_SIZE }}
+        TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
+        TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
+        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+        TF_VAR_node_version: ${{ secrets.NODE_VERSION }}
+        TF_VAR_dragonfly_repo: ${{ secrets.DRAGONFLY_REPO }}
+        TF_VAR_dragonfly_port: ${{ secrets.DRAGONFLY_PORT }}
+        TF_VAR_dragonfly_domain: ${{ secrets.DRAGONFLY_DOMAIN }}
+        TF_VAR_dragonfly_secret: ${{ secrets.DRAGONFLY_SECRET }}
+        TF_VAR_dragonfly_branch: ${{ secrets.DRAGONFLY_BRANCH }}
+        TF_VAR_firefly_repo: ${{ secrets.FIREFLY_REPO }}
+        TF_VAR_firefly_port: ${{ secrets.FIREFLY_PORT }}
+        TF_VAR_firefly_domain: ${{ secrets.FIREFLY_DOMAIN }}
+        TF_VAR_firefly_secret: ${{ secrets.FIREFLY_SECRET }}
+        TF_VAR_firefly_branch: ${{ secrets.FIREFLY_BRANCH }}
+        TF_VAR_github_token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Terraform Apply
-      run: terraform apply -auto-approve tfplan
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: terraform apply -auto-approve -input=false
+      env:
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+        TF_VAR_droplet_image: ${{ secrets.DROPLET_IMAGE }}
+        TF_VAR_droplet_name: ${{ secrets.DROPLET_NAME }}
+        TF_VAR_droplet_region: ${{ secrets.DROPLET_REGION }}
+        TF_VAR_droplet_size: ${{ secrets.DROPLET_SIZE }}
+        TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
+        TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
+        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+        TF_VAR_node_version: ${{ secrets.NODE_VERSION }}
+        TF_VAR_dragonfly_repo: ${{ secrets.DRAGONFLY_REPO }}
+        TF_VAR_dragonfly_port: ${{ secrets.DRAGONFLY_PORT }}
+        TF_VAR_dragonfly_domain: ${{ secrets.DRAGONFLY_DOMAIN }}
+        TF_VAR_dragonfly_secret: ${{ secrets.DRAGONFLY_SECRET }}
+        TF_VAR_dragonfly_branch: ${{ secrets.DRAGONFLY_BRANCH }}
+        TF_VAR_firefly_repo: ${{ secrets.FIREFLY_REPO }}
+        TF_VAR_firefly_port: ${{ secrets.FIREFLY_PORT }}
+        TF_VAR_firefly_domain: ${{ secrets.FIREFLY_DOMAIN }}
+        TF_VAR_firefly_secret: ${{ secrets.FIREFLY_SECRET }}
+        TF_VAR_firefly_branch: ${{ secrets.FIREFLY_BRANCH }}
+        TF_VAR_github_token: ${{ secrets.GITHUB_TOKEN }}
