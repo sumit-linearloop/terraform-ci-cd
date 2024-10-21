@@ -13,7 +13,7 @@ resource "digitalocean_droplet" "web_server" {
   connection {
     type        = "ssh"
     user        = "root"
-    private_key = file(var.ssh_private_key_path)
+    private_key = var.ssh_private_key  # Use the variable directly
     host        = self.ipv4_address
   }
 
