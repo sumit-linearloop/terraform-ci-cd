@@ -112,9 +112,10 @@ variable "aws_secret_key" {
 }
 
 variable "aws_region" {
-  description = "AWS region"
+  description = "AWS Region"
   type        = string
 }
+
 
 variable "github_secret" {
   description = "GitHub Personal Access Token"
