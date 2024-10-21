@@ -70,7 +70,7 @@ jobs:
           
           # Clone the application repository if not already present
           if [ ! -d "/var/www/dragonfly" ]; then
-            git clone -b main <YOUR_REPOSITORY_URL> /var/www/dragonfly
+            git clone -b main git@github.com:sumit-linearloop/terraform-ci-cd.git /var/www/dragonfly
           fi
 
           cd /var/www/dragonfly
