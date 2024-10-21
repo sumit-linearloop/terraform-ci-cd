@@ -68,12 +68,17 @@ jobs:
           nvm install 18  # Install Node.js (choose your version)
           nvm use 18
           
+          # Use a directory within the home directory for permissions
+          REPO_DIR="$HOME/dragonfly"
+          mkdir -p "$REPO_DIR"  # Create the directory if it doesn't exist
+          
+          cd "$REPO_DIR"
           # Clone the application repository if not already present
-          if [ ! -d "/var/www/dragonfly" ]; then
-            git clone -b main git@github.com:sumit-linearloop/terraform-ci-cd.git /var/www/dragonfly
+          if [ ! -d "$REPO_DIR/.git" ]; then
+            git clone -b main git@github.com:sumit-linearloop/terraform-ci-cd.git "$REPO_DIR"
           fi
 
-          cd /var/www/dragonfly
+          cd "$REPO_DIR"
           git pull origin main  # Pull the latest changes from main
 
           # Install dependencies
