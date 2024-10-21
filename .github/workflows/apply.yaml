@@ -1,51 +1,72 @@
-name: Terraform CI/CD Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
-      - main
+      - master
+      - DEV # Include other branches if necessary
+  pull_request:
+    branches:
+      - master
+      - DEV
 
 jobs:
-  terraform:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      - name: Install AWS CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y awscli
-
-      - name: Configure AWS CLI
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
-        run: |
-          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-          aws configure set region ap-south-1
-
-      - name: Download terraform.tfvars from S3
-        run: |
-          mkdir -p terraform
-          aws s3 cp s3://sumit-cli/terraform.tfvars terraform/terraform.tfvars
-
-      - name: List Terraform Directory
-        run: ls -la terraform
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
         with:
-          terraform_version: 1.5.0
+          node-version: ${{ secrets.NODE_VERSION }}
 
-      - name: Terraform Init
-        run: terraform -chdir=terraform init
+      - name: Install dependencies
+        run: npm install
 
-      - name: Terraform Plan
-        run: terraform -chdir=terraform plan -var-file=terraform/terraform.tfvars
+      - name: Run tests
+        run: npm test
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
-        run: terraform -chdir=terraform apply -auto-approve -var-file=terraform/terraform.tfvars
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY_PATH }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PUBLIC_KEY_PATH }}" > ~/.ssh/id_rsa.pub
+          chmod 644 ~/.ssh/id_rsa.pub
+          ssh-keyscan -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to DigitalOcean
+        env:
+          DO_TOKEN: ${{ secrets.DO_TOKEN }}
+          DRAGONFLY_REPO: ${{ secrets.DRAGONFLY_REPO }}
+          DRAGONFLY_PORT: ${{ secrets.DRAGONFLY_PORT }}
+          DRAGONFLY_SECRET: ${{ secrets.DRAGONFLY_SECRET }}
+          FIREFLY_REPO: ${{ secrets.FIREFLY_REPO }}
+          FIREFLY_PORT: ${{ secrets.FIREFLY_PORT }}
+          FIREFLY_SECRET: ${{ secrets.FIREFLY_SECRET }}
+        run: |
+          # Here you can add commands to SSH into your Droplet and run Docker commands
+          ssh root@${{ secrets.DROPLET_IP }} << 'EOF'
+          # Pull the latest code from the repository
+          git clone $DRAGONFLY_REPO /var/www/dragonfly || (cd /var/www/dragonfly && git pull)
+
+          # Install dependencies and start the application
+          cd /var/www/dragonfly
+          npm install
+          pm2 start --name "dragonfly" npm -- start
+
+          # Repeat for Firefly if needed
+          git clone $FIREFLY_REPO /var/www/firefly || (cd /var/www/firefly && git pull)
+          cd /var/www/firefly
+          npm install
+          pm2 start --name "firefly" npm -- start
+          EOF
