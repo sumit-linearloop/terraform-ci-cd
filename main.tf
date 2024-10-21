@@ -4,10 +4,10 @@ resource "digitalocean_ssh_key" "default" {
 }
 
 resource "digitalocean_droplet" "web_server" {
-  image    = ubuntu-24-04-x64
-  name     = sumit
-  region   = blr1
-  size     = s-1vcpu-1gb
+  image    = "ubuntu-24-04-x64"  # Added quotes
+  name     = "sumit"              # Added quotes
+  region   = "blr1"               # Added quotes
+  size     = "s-1vcpu-1gb"        # Added quotes
   ssh_keys = [digitalocean_ssh_key.default.fingerprint]
 
   connection {
