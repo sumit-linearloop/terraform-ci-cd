@@ -1,9 +1,6 @@
 name: Terraform CI/CD Pipeline
 
 on:
-  push:
-    branches:
-      - main  # Runs on push to 'main'
   workflow_dispatch:  # Enables manual trigger
     inputs:
       action:  # Input to choose between apply or destroy
@@ -52,7 +49,7 @@ jobs:
               exit 1; 
             }
           elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
-            terraform apply -var="app_action=destroy_dragonfly" -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -auto-approve || { 
+            terraform destroy -var="app_action=destroy_dragonfly" -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -auto-approve || { 
               echo "Terraform destroy failed"; 
               exit 1; 
             }
@@ -68,6 +65,15 @@ jobs:
           nvm install 18  # Install Node.js (choose your version)
           nvm use 18
           
+          # Set up SSH keys
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
+
+          # Add GitHub to known hosts
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
           # Use a directory within the home directory for permissions
           REPO_DIR="$HOME/dragonfly"
           mkdir -p "$REPO_DIR"  # Create the directory if it doesn't exist
