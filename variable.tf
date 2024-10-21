@@ -123,8 +123,8 @@ variable "github_secret" {
   sensitive   = true
 }
 
-variable "ssh_public_key" {
-  description = "SSH public key"
+variable "public_key" {
+  description = "SSH public key for DigitalOcean"
   type        = string
 }
 
