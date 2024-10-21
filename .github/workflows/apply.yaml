@@ -26,10 +26,10 @@ jobs:
       - name: Download terraform.tfvars from S3
         run: |
           # Create a directory for the Terraform variables file
-          mkdir -p ./terraform-ci-cd
-          
+ 
+        
           # Attempt to download the terraform.tfvars file from S3
-          if ! aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform-ci-cd/terraform.tfvars; then
+          if ! aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform.tfvars; then
             echo "Failed to download terraform.tfvars from S3"
             exit 1
           fi
@@ -43,9 +43,9 @@ jobs:
       - name: Set environment variables
         run: |
           # Extract AWS credentials and region from the downloaded terraform.tfvars file
-          AWS_ACCESS_KEY=$(grep -E '^AWS_ACCESS_KEY\s*=' ./terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
-          AWS_SECRET_KEY=$(grep -E '^AWS_SECRET_KEY\s*=' ./terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
-          AWS_REGION=$(grep -E '^AWS_REGION\s*=' ./terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+          AWS_ACCESS_KEY=$(grep -E '^AWS_ACCESS_KEY\s*=' .terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+          AWS_SECRET_KEY=$(grep -E '^AWS_SECRET_KEY\s*=' ./terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+          AWS_REGION=$(grep -E '^AWS_REGION\s*=' ./terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
 
           # Output environment variables for the next steps
           echo "AWS_ACCESS_KEY=${AWS_ACCESS_KEY}" >> $GITHUB_ENV
