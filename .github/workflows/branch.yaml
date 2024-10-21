@@ -6,7 +6,7 @@ on:
       action:  # Input to choose between apply or destroy
         description: "Select the Terraform action to perform"
         required: true
-        default: "apply"
+        default: "setup_dragonfly"  # Default action if not specified
         type: choice
         options:
           - setup_dragonfly
@@ -17,26 +17,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v2
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Download terraform.tfvars from S3
-        run: |
-          aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform.tfvars || { 
-            echo "Failed to download terraform.tfvars"; 
-            exit 1; 
-          }
+          terraform_version: 1.5.0  # Use the latest stable version
 
       - name: Terraform Init
-        run: |
-          terraform init || { echo "Terraform init failed"; exit 1; }
+        run: terraform init
 
       - name: Terraform Apply or Destroy
         env:
@@ -44,16 +34,29 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           if [ "${{ github.event.inputs.action }}" == "setup_dragonfly" ]; then
+            echo "Applying setup_dragonfly..."
             terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -var="app_action=setup_dragonfly" || { 
               echo "Terraform apply for setup_dragonfly failed"; 
               exit 1; 
             }
           elif [ "${{ github.event.inputs.action }}" == "destroy_dragonfly" ]; then
-            terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -var="app_action=destroy_dragonfly" || { 
-              echo "Terraform apply for destroy_dragonfly failed"; 
+            echo "Destroying dragonfly..."
+            terraform destroy -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -var="app_action=destroy_dragonfly" || { 
+              echo "Terraform destroy for destroy_dragonfly failed"; 
               exit 1; 
             }
           else
             echo "Invalid action specified"; 
             exit 1;
           fi
+
+      - name: SSH into server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}  # Assuming your private key is stored in secrets
+        run: |
+          echo "${SSH_PRIVATE_KEY}" > private_key.pem  # Write the private key to a file
+          chmod 600 private_key.pem  # Secure the private key file
+          ssh -i private_key.pem root@139.59.64.15 "echo 'SSH connection successful!'" || { 
+            echo "SSH connection failed"; 
+            exit 1; 
+          }
