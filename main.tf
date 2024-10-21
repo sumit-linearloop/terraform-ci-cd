@@ -1,4 +1,4 @@
-resource "digitalocean_ssh_key" "default" {
+resource "digitalocean_ssh_key" "existing" {
   name       = "sumit-key"  # Name for the SSH key in DigitalOcean
   public_key = var.ssh_public_key
 }
@@ -8,12 +8,12 @@ resource "digitalocean_droplet" "web_server" {
   name     = "sumit"              # Added quotes
   region   = "blr1"               # Added quotes
   size     = "s-1vcpu-1gb"        # Added quotes
-  ssh_keys = [digitalocean_ssh_key.default.fingerprint]
+  ssh_keys = [digitalocean_ssh_key.existing.fingerprint]
 
   connection {
     type        = "ssh"
     user        = "root"
-    private_key = var.ssh_private_key  # Use the variable directly
+    private_key = file(var.ssh_private_key_path)
     host        = self.ipv4_address
   }
 
