@@ -1,55 +1,59 @@
-name: CI/CD Pipeline for Application Setup
+name: Terraform CI/CD Pipeline
 
 on:
   push:
     branches:
-      - main
-      - DEV  # Runs on push to both 'main' and 'dev'
-  workflow_dispatch:  # Optional manual trigger
-
-env:
-  NVM_DIR: "$HOME/.nvm"
+      - main  # Runs on push to both 'main' and 'dev'
+  workflow_dispatch:  # Enables manual trigger
+    inputs:
+      action:  # Input to choose between apply or destroy
+        description: "Select the Terraform action to perform"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
 
 jobs:
-  deploy:
+  terraform:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Check out the code
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      # Step 2: Set up Terraform CLI
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
         with:
-          terraform_version: 1.9.8
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      # Step 3: Terraform Init
+      - name: Download terraform.tfvars from S3
+        run: |
+          aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform.tfvars || { 
+            echo "Failed to download terraform.tfvars"; 
+            exit 1; 
+          }
+
       - name: Terraform Init
-        run: terraform init
-
-      # Step 4: Terraform Apply/Destroy based on the branch
-      - name: Terraform Apply
         run: |
-          if [ "${{ github.ref_name }}" == "main" ]; then
-            terraform apply -auto-approve -var="app_action=setup_dragonfly"
-          elif [ "${{ github.ref_name }}" == "dev" ]; then
-            terraform apply -auto-approve -var="app_action=setup_firefly"
+          terraform init || { echo "Terraform init failed"; exit 1; }
+
+      - name: Terraform ${ { github.event.inputs.action } }  # Dynamically choose apply or destroy
+        env:
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+            terraform apply -var="app_action=setup_dragonfly" -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" || { 
+              echo "Terraform apply failed"; 
+              exit 1; 
+            }
+          elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
+            terraform apply -var="app_action=destroy_dragonfly" -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" || { 
+              echo "Terraform destroy failed"; 
+              exit 1; 
+            }
           fi
-
-      # Step 5: Execute the Application Setup Script
-      - name: Run Setup Script
-        run: |
-          chmod +x ./setup.sh  # Ensure script is executable
-          if [ "${{ github.ref_name }}" == "main" ]; then
-            ./setup.sh setup_dragonfly
-          elif [ "${{ github.ref_name }}" == "dev" ]; then
-            ./setup.sh setup_firefly
-          fi
-
-      # Optional Step 6: Run Destroy on Workflow Dispatch (manual trigger)
-      - name: Run Destroy Script (Manual)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          ./setup.sh destroy_dragonfly || ./setup.sh destroy_firefly
