@@ -80,11 +80,12 @@ jobs:
             
             # Clone the application repository if not already present
             if [ ! -d "$REPO_DIR/.git" ]; then
-              git clone -b main git@github.com:sumit-linearloop/terraform-ci-cd.git "$REPO_DIR"
+              git clone -b dev git@github.com:sumit-linearloop/terraform-ci-cd.git "$REPO_DIR"  # Changed to 'dev'
             fi
 
             cd "$REPO_DIR"
-            git pull origin main  # Pull the latest changes
+            git checkout dev  # Ensure we are on the dev branch
+            git pull origin dev  # Pull the latest changes from dev
 
             # Install dependencies
             yarn install || { echo "Yarn install failed"; exit 1; }
