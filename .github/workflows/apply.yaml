@@ -19,25 +19,52 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}  # Ensure these secrets are set correctly
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}  # Ensure these secrets are set correctly
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}  # e.g., us-east-1
 
       - name: Download terraform.tfvars from S3
         run: |
+          # Create a directory for the Terraform variables file
           mkdir -p ./terraform-ci-cd
-          aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform-ci-cd/terraform.tfvars
+          
+          # Attempt to download the terraform.tfvars file from S3
+          if ! aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform-ci-cd/terraform.tfvars; then
+            echo "Failed to download terraform.tfvars from S3"
+            exit 1
+          fi
+          
           # Check if the file was copied successfully
           if [ ! -f ./terraform-ci-cd/terraform.tfvars ]; then
-            echo "Failed to download terraform.tfvars"
+            echo "Failed to locate terraform.tfvars after download"
             exit 1
           fi
 
       - name: Set environment variables
         run: |
+          # Extract AWS credentials and region from the downloaded terraform.tfvars file
           AWS_ACCESS_KEY=$(grep -E '^AWS_ACCESS_KEY\s*=' ./terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
           AWS_SECRET_KEY=$(grep -E '^AWS_SECRET_KEY\s*=' ./terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
           AWS_REGION=$(grep -E '^AWS_REGION\s*=' ./terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+
+          # Output environment variables for the next steps
           echo "AWS_ACCESS_KEY=${AWS_ACCESS_KEY}" >> $GITHUB_ENV
           echo "AWS_SECRET_KEY=${AWS_SECRET_KEY}" >> $GITHUB_ENV
           echo "AWS_REGION=${AWS_REGION}" >> $GITHUB_ENV
+
+      # Add additional steps here for Terraform operations or other tasks
+      # For example, running Terraform init, plan, and apply:
+      - name: Terraform Init
+        run: |
+          cd ./terraform-ci-cd
+          terraform init
+
+      - name: Terraform Plan
+        run: |
+          cd ./terraform-ci-cd
+          terraform plan
+
+      - name: Terraform Apply
+        run: |
+          cd ./terraform-ci-cd
+          terraform apply -auto-approve
