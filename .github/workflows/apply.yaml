@@ -41,40 +41,49 @@
 
 
 
-name: Terraform Apply
+name: Terraform CI/CD
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   terraform:
-    name: 'Terraform Deployment'
     runs-on: ubuntu-latest
 
-    env:
-      TF_VAR_digitalocean_token: ${{ secrets.TF_VAR_digitalocean_token }}  # DigitalOcean token from secrets
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v1
         with:
-          terraform_wrapper: false
+          terraform_version: 1.9.8  # Specify your Terraform version
 
       - name: Terraform Init
         run: terraform init
-        env:
-          TF_LOG: INFO  # Set Terraform logging level to INFO for more details
+
+      - name: Terraform Validate
+        run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan
-        env:
-          TF_VAR_digitalocean_token: ${{ secrets.TF_VAR_digitalocean_token }}  # Pass the token as an environment variable
+        id: plan
+        run: terraform plan -out=tfplan
 
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
         env:
-          TF_VAR_digitalocean_token: ${{ secrets.TF_VAR_digitalocean_token }}  # Pass the token as an environment variable
+          TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}  # Use GitHub secrets for sensitive data
+          TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_node_version: '18'  # Or any version you're using
+          TF_VAR_dragonfly_repo: ${{ secrets.DRAGONFLY_REPO }}
+          TF_VAR_firefly_repo: ${{ secrets.FIREFLY_REPO }}
+          TF_VAR_firefly_port: ${{ secrets.FIREFLY_PORT }}
+          TF_VAR_dragonfly_port: ${{ secrets.DRAGONFLY_PORT }}
+          TF_VAR_firefly_domain: ${{ secrets.FIREFLY_DOMAIN }}
+          TF_VAR_dragonfly_domain: ${{ secrets.DRAGONFLY_DOMAIN }}
+          TF_VAR_dragonfly_secret: ${{ secrets.DRAGONFLY_SECRET }}
+          TF_VAR_firefly_secret: ${{ secrets.FIREFLY_SECRET }}
+          TF_VAR_dragonfly_branch: ${{ secrets.DRAGONFLY_BRANCH }}
+          TF_VAR_firefly_branch: ${{ secrets.FIREFLY_BRANCH }}
