@@ -122,3 +122,8 @@ variable "github_secret" {
   type        = string
   sensitive   = true
 }
+
+variable "ssh_public_key" {
+  description = "SSH public key"
+  type        = string
+}

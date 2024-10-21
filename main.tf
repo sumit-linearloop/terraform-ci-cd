@@ -1,6 +1,6 @@
 resource "digitalocean_ssh_key" "default" {
-  name       = "terra-key"
-  public_key = file(var.ssh_public_key_path)
+  name       = "sumit-key"  # Name for the SSH key in DigitalOcean
+  public_key = var.ssh_public_key
 }
 
 resource "digitalocean_droplet" "web_server" {
