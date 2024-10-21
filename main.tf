@@ -1,6 +1,6 @@
 resource "digitalocean_ssh_key" "existing" {
   name       = "sumit-key"  # Name for the SSH key in DigitalOcean
-  public_key = var.ssh_public_key
+  public_key = file("D:/ssh/sumit.pub")
 }
 
 resource "digitalocean_droplet" "web_server" {
