@@ -1,49 +1,49 @@
-name: Terraform CI/CD
-
+name: CI/CD Pipeline
+ 
 on:
   push:
     branches:
-      - main
-
-
+      - main  # Change this to your desired branch
+  pull_request:
+    branches:
+      - main  # Change this to your desired branch
+ 
 jobs:
-  terraform:
+  build:
     runs-on: ubuntu-latest
-
+ 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
+ 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}  # Ensure these secrets are set correctly
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}  # e.g., us-east-1
+ 
+      - name: Download terraform.tfvars from S3
+        run: |
+          # Create a directory for the Terraform variables file
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v1
-      with:
-        terraform_version:1.9.8
-
-    - name: Configure AWS Credentials
-      run: |
-        echo "[default]" > $HOME/.aws/credentials
-        echo "aws_access_key_id=${{ secrets.AWS_ACCESS_KEY }}" >> $HOME/.aws/credentials
-        echo "aws_secret_access_key=${{ secrets.AWS_SECRET_KEY }}" >> $HOME/.aws/credentials
-
-    - name: Set up SSH Keys
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY_PATH }}" > ~/.ssh/sumit
-        chmod 600 ~/.ssh/sumit
-        echo "${{ secrets.SSH_PUBLIC_KEY_PATH }}" > ~/.ssh/sumit.pub
-        chmod 644 ~/.ssh/sumit.pub
-        ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-    - name: Terraform Init
-      run: terraform init
-
-    - name: Terraform Plan
-      run: terraform plan -var-file=terraform.tfvars
-
-    - name: Terraform Apply
-      run: terraform apply -auto-approve -var-file=terraform.tfvars
-      env:
-        DO_TOKEN: ${{ secrets.DO_TOKEN }}
-        AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-        AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
-        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          # Download the file directly into the directory
+          if ! aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform.tfvars; then
+            echo "Failed to download terraform.tfvars from S3"
+            exit 1
+          fi
+ 
+      - name: Terraform Init
+        run: |
+          cd ./terraform-ci-cd
+          terraform init || { echo "Terraform init failed"; exit 1; }
+ 
+      - name: Terraform Plan
+        run: |
+          cd ./terraform-ci-cd
+          terraform plan || { echo "Terraform plan failed"; exit 1; }
+ 
+      - name: Terraform Apply
+        run: |
+          cd ./terraform-ci-cd
+          terraform apply -auto-approve || { echo "Terraform apply failed"; exit 1; }
