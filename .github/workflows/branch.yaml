@@ -38,7 +38,7 @@ jobs:
         run: |
           terraform init || { echo "Terraform init failed"; exit 1; }
 
-      - name: Terraform ${ { github.event.inputs.action } }  # Dynamically choose apply or destroy
+      - name: Terraform Apply or Destroy
         env:
           SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -55,46 +55,50 @@ jobs:
             }
           fi
 
-      # Step to build and start the application using PM2
-      - name: Build and Start Application
+      # Step to build and start the application using PM2 on the same server
+      - name: Build and Start Application on Server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          # Install Node.js and PM2
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-          nvm install 18  # Install Node.js (choose your version)
-          nvm use 18
-          
           # Set up SSH keys
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/id_rsa
 
-          # Add GitHub to known hosts
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          # Add the server to known hosts
+          echo "${{ secrets.SERVER_IP }}" > ~/.ssh/known_hosts
 
-          # Use a directory within the home directory for permissions
-          REPO_DIR="$HOME/dragonfly"
-          mkdir -p "$REPO_DIR"  # Create the directory if it doesn't exist
-          
-          cd "$REPO_DIR"
-          # Clone the application repository if not already present
-          if [ ! -d "$REPO_DIR/.git" ]; then
-            git clone -b main git@github.com:sumit-linearloop/terraform-ci-cd.git "$REPO_DIR"
-          fi
+          # Define the server IP and application directory
+          SERVER_IP="${{ secrets.SERVER_IP }}"  # Replace with your server's IP or hostname
+          REPO_DIR="/var/www/dragonfly"  # Adjust as necessary for your server
 
-          cd "$REPO_DIR"
-          git pull origin main  # Pull the latest changes from main
+          # Clone and build the application on the server
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa user@$SERVER_IP << 'EOF'
+            # Ensure Node.js and PM2 are installed
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+            nvm install 18  # Install Node.js
+            nvm use 18
+            
+            # Clone the application repository if not already present
+            if [ ! -d "$REPO_DIR/.git" ]; then
+              git clone -b main git@github.com:sumit-linearloop/terraform-ci-cd.git "$REPO_DIR"
+            fi
 
-          # Install dependencies
-          yarn install || { echo "Yarn install failed"; exit 1; }
+            cd "$REPO_DIR"
+            git pull origin main  # Pull the latest changes
 
-          # Build the project
-          yarn build || { echo "Build failed"; exit 1; }
+            # Install dependencies
+            yarn install || { echo "Yarn install failed"; exit 1; }
 
-          # Start the application with PM2
-          pm2 start dist/main.js --name "dragonfly" -i 1 || { echo "PM2 start failed"; exit 1; }
-          pm2 save || { echo "PM2 save failed"; exit 1; }
+            # Build the project
+            yarn build || { echo "Build failed"; exit 1; }
 
-          echo "Application started successfully!"
+            # Start the application with PM2
+            pm2 start dist/main.js --name "dragonfly" -i 1 || { echo "PM2 start failed"; exit 1; }
+            pm2 save || { echo "PM2 save failed"; exit 1; }
+
+            echo "Application started successfully!"
+          EOF
