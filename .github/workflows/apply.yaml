@@ -35,15 +35,12 @@ jobs:
  
       - name: Terraform Init
         run: |
-          cd ./terraform-ci-cd
           terraform init || { echo "Terraform init failed"; exit 1; }
  
       - name: Terraform Plan
         run: |
-          cd ./terraform-ci-cd
           terraform plan || { echo "Terraform plan failed"; exit 1; }
  
       - name: Terraform Apply
         run: |
-          cd ./terraform-ci-cd
           terraform apply -auto-approve || { echo "Terraform apply failed"; exit 1; }
