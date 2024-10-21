@@ -34,10 +34,6 @@ jobs:
             exit 1; 
           }
 
-      - name: Terraform Init
-        run: |
-          terraform init || { echo "Terraform init failed"; exit 1; }
-
       - name: Terraform Apply or Destroy
         env:
           SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
