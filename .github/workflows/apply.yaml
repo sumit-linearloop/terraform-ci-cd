@@ -11,37 +11,33 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up AWS CLI
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}  # Ensure these secrets are set correctly
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}  # e.g., us-east-1
 
-      - name: Create directory for terraform.tfvars
-        run: |
-          mkdir -p /d/terraform-ci-cd
-
       - name: Download terraform.tfvars from S3
         run: |
-          aws s3 cp s3://sumit-cli/terraform.tfvars /d/terraform-ci-cd/terraform.tfvars
+          mkdir -p ./terraform-ci-cd
+          aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform-ci-cd/terraform.tfvars
           # Check if the file was copied successfully
-          if [ ! -f /d/terraform-ci-cd/terraform.tfvars ]; then
+          if [ ! -f ./terraform-ci-cd/terraform.tfvars ]; then
             echo "Failed to download terraform.tfvars"
             exit 1
           fi
 
       - name: Set environment variables
         run: |
-          AWS_ACCESS_KEY=$(grep -E '^AWS_ACCESS_KEY\s*=' /d/terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
-          AWS_SECRET_KEY=$(grep -E '^AWS_SECRET_KEY\s*=' /d/terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
-          AWS_REGION=$(grep -E '^AWS_REGION\s*=' /d/terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+          AWS_ACCESS_KEY=$(grep -E '^AWS_ACCESS_KEY\s*=' ./terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+          AWS_SECRET_KEY=$(grep -E '^AWS_SECRET_KEY\s*=' ./terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+          AWS_REGION=$(grep -E '^AWS_REGION\s*=' ./terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
           echo "AWS_ACCESS_KEY=${AWS_ACCESS_KEY}" >> $GITHUB_ENV
           echo "AWS_SECRET_KEY=${AWS_SECRET_KEY}" >> $GITHUB_ENV
           echo "AWS_REGION=${AWS_REGION}" >> $GITHUB_ENV
-
