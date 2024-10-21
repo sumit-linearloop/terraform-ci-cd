@@ -31,10 +31,16 @@ resource "digitalocean_droplet" "web_server" {
     inline = [
       "chmod +x /tmp/initial_setup.sh",
       "chmod +x /tmp/app_setup.sh",
-      "SSH_PRIVATE_KEY='${file(var.ssh_private_key_path)}' NODE_VERSION='${var.node_version}' AWS_ACCESS_KEY='${var.aws_access_key}' AWS_SECRET_KEY='${var.aws_secret_key}' AWS_REGION='${var.aws_region}' bash /tmp/initial_setup.sh"
+      "export SSH_PRIVATE_KEY='${var.ssh_private_key}'",
+      "export NODE_VERSION='${var.node_version}'",
+      "export AWS_ACCESS_KEY='${var.aws_access_key}'",
+      "export AWS_SECRET_KEY='${var.aws_secret_key}'",
+      "export AWS_REGION='${var.aws_region}'",
+      "bash /tmp/initial_setup.sh"
     ]
   }
 }
+
 
 resource "null_resource" "app_management" {
   depends_on = [digitalocean_droplet.web_server]

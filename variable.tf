@@ -46,7 +46,6 @@ variable "droplet_size" {
 variable "node_version" {
   description = "Node.js version to install"
   type        = string
-  default     = "14"
 }
 
 variable "dragonfly_repo" {
@@ -102,12 +101,12 @@ variable "dragonfly_branch" {
 
 # Variable declarations
 variable "aws_access_key" {
-  description = "AWS Access Key"
+  description = "AWS Access Key ID"
   type        = string
 }
 
 variable "aws_secret_key" {
-  description = "AWS Secret Key"
+  description = "AWS Secret Access Key"
   type        = string
 }
 
@@ -129,6 +128,8 @@ variable "ssh_public_key" {
 }
 
 variable "ssh_private_key" {
-  description = "SSH private key for DigitalOcean"
+  description = "SSH private key content"
   type        = string
 }
+
+
