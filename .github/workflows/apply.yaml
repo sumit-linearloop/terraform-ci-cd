@@ -1,73 +1,47 @@
-name: Terraform CI/CD
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
-      - main
+      - main  # Change this to your desired branch
+  pull_request:
+    branches:
+      - main  # Change this to your desired branch
 
 jobs:
-  terraform:
+  build:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v1
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
         with:
-          terraform_version: 1.9.8
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}  # e.g., us-east-1
 
-      - name: Install AWS CLI
+      - name: Create directory for terraform.tfvars
         run: |
-          sudo apt-get update
-          sudo apt-get install -y awscli
-          sudo apt-get install -y jq  # Install jq to parse JSON
+          mkdir -p /d/terraform-ci-cd
 
-      - name: Debug Environment Variables
-        run: env
-
-      - name: Configure AWS CLI
+      - name: Download terraform.tfvars from S3
         run: |
-          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY }}
-          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_KEY }}
-          aws configure set region ${{ secrets.AWS_REGION }}
+          aws s3 cp s3://sumit-cli/terraform.tfvars /d/terraform-ci-cd/terraform.tfvars
+          # Check if the file was copied successfully
+          if [ ! -f /d/terraform-ci-cd/terraform.tfvars ]; then
+            echo "Failed to download terraform.tfvars"
+            exit 1
+          fi
 
-      - name: Fetch Secrets from S3
+      - name: Set environment variables
         run: |
-          aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform.tfvars
-          AWS_ACCESS_KEY=$(grep -E '^AWS_ACCESS_KEY\s*=' terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
-          AWS_SECRET_KEY=$(grep -E '^AWS_SECRET_KEY\s*=' terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
-          AWS_REGION=$(grep -E '^AWS_REGION\s*=' terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+          AWS_ACCESS_KEY=$(grep -E '^AWS_ACCESS_KEY\s*=' /d/terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+          AWS_SECRET_KEY=$(grep -E '^AWS_SECRET_KEY\s*=' /d/terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
+          AWS_REGION=$(grep -E '^AWS_REGION\s*=' /d/terraform-ci-cd/terraform.tfvars | cut -d'=' -f2 | tr -d ' "')
           echo "AWS_ACCESS_KEY=${AWS_ACCESS_KEY}" >> $GITHUB_ENV
           echo "AWS_SECRET_KEY=${AWS_SECRET_KEY}" >> $GITHUB_ENV
           echo "AWS_REGION=${AWS_REGION}" >> $GITHUB_ENV
 
-
-      - name: Terraform Init
-        run: terraform init
-
-      - name: Terraform Plan
-        run: |
-          terraform plan -out=tfplan \
-            -var="aws_access_key=${{ env.AWS_ACCESS_KEY }}" \
-            -var="aws_secret_key=${{ env.AWS_SECRET_KEY }}" \
-            -var="aws_region=${{ env.AWS_REGION }}"
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
-        env:
-          TF_VAR_node_version: ${{ secrets.NODE_VERSION }}
-          TF_VAR_ssh_private_key_path: ${{ secrets.SSH_PRIVATE_KEY_PATH }}
-          TF_VAR_ssh_public_key_path: ${{ secrets.SSH_PUBLIC_KEY_PATH }}
-          TF_VAR_dragonfly_repo: ${{ secrets.DRAGONFLY_REPO }}
-          TF_VAR_firefly_repo: ${{ secrets.FIREFLY_REPO }}
-          TF_VAR_firefly_port: ${{ secrets.FIREFLY_PORT }}
-          TF_VAR_dragonfly_port: ${{ secrets.DRAGONFLY_PORT }}
-          TF_VAR_firefly_domain: ${{ secrets.FIREFLY_DOMAIN }}
-          TF_VAR_dragonfly_domain: ${{ secrets.DRAGONFLY_DOMAIN }}
-          TF_VAR_dragonfly_secret: ${{ secrets.DRAGONFLY_SECRET }}
-          TF_VAR_firefly_secret: ${{ secrets.FIREFLY_SECRET }}
-          TF_VAR_dragonfly_branch: ${{ secrets.DRAGONFLY_BRANCH }}
-          TF_VAR_firefly_branch: ${{ secrets.FIREFLY_BRANCH }}
-          TF_VAR_app_action: ${{ secrets.APP_ACTION }}
