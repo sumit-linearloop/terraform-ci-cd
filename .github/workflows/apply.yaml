@@ -60,8 +60,6 @@ on:
         options:
           - apply
           - destroy
-          - setup_dragonfly
-          - destroy_dragonfly
 
 jobs:
   terraform:
