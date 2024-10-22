@@ -18,25 +18,24 @@ jobs:
         with:
           node-version: '18'  # Specify your desired Node.js version
 
+      - name: Prepare SSH Key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > id_rsa
+          chmod 600 id_rsa
+          eval "$(ssh-agent -s)"
+          ssh-add id_rsa
+
+      - name: Test SSH connection to GitHub
+        run: ssh -T git@github.com
+
+      - name: Clone the repository
+        run: git clone git@github.com:sumit-linearloop/digitalocean-api.git /var/www/DEV
+
       - name: Run deploy script
         env:
           SERVER_IP: 139.59.66.18  # Replace with your server IP
           SERVER_HOST: root        # Replace with your server host
         run: |
           echo "Starting deployment process..."
-          
-          # Add SSH key to the agent
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > id_rsa
-          chmod 600 id_rsa
-          eval "$(ssh-agent -s)"
-          ssh-add id_rsa
-
-          # Test SSH connection to GitHub
-          ssh -T git@github.com
-
-          # Clone the repository
-          git clone git@github.com:sumit-linearloop/digitalocean-api.git /var/www/DEV
-          
-          # Execute your deploy script
           chmod +x ./deploy.sh
           ./deploy.sh
