@@ -14,11 +14,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Write SSH Key to Temporary File
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/private_key
+          chmod 600 /tmp/private_key
+
       - name: Run Terraform Action
         run: |
-          echo "Running action: apply"
+          echo "Running action: ${ACTION}"
 
-          case "apply" in
+          case "${ACTION}" in
             apply)
               echo "Running terraform apply..."
               terraform apply -auto-approve \
@@ -44,12 +49,56 @@ jobs:
               exit 1
               ;;
           esac
-        shell: /usr/bin/bash -e {0}
+        shell: /usr/bin/bash
         env:
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          ACTION: apply  # Change this to use an input or dynamic value if needed
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
           SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: /tmp/private_key
           DROPLET_IP: ${{ secrets.DROPLET_IP }}
+
+      - name: Create and Transfer 1.sh Script
+        run: |
+          cat << 'EOF' > 1.sh
+          #!/bin/bash
+          GIT_REPO="git@github.com:sumit-linearloop/digitalocean-api.git"
+          BRANCH_NAME="DEV"
+          WORK_DIR="/var/www/DEV"
+
+          mkdir -p "$WORK_DIR"
+          cd "$WORK_DIR" || exit
+
+          if [ "$(ls -A $WORK_DIR)" ]; then
+              echo "Directory is not empty. Pulling latest changes..."
+              git pull origin "$BRANCH_NAME"
+          else
+              echo "Directory is empty. Cloning repository..."
+              git clone "$GIT_REPO" .
+              git checkout "$BRANCH_NAME"
+          fi
+
+          echo "Installing dependencies and building..."
+          yarn install
+          yarn build
+
+          if pm2 list | grep -q "DEV"; then
+              echo "Restarting PM2 process..."
+              pm2 restart "DEV"
+          else
+              echo "Starting new PM2 process..."
+              pm2 start dist/main.js --name "DEV"
+          fi
+
+          pm2 save
+          echo "Deployment completed successfully!"
+          EOF
+
+      - name: Transfer Script to Droplet
+        run: |
+          scp -o StrictHostKeyChecking=no -i /tmp/private_key 1.sh root@${{ secrets.DROPLET_IP }}:/tmp/
+
+      - name: Run Script on Droplet
+        run: |
+          ssh -o StrictHostKeyChecking=no -i /tmp/private_key root@${{ secrets.DROPLET_IP }} 'bash /tmp/1.sh'
