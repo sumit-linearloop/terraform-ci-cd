@@ -1,88 +1,76 @@
-name: Run Terraform and Setup App
+name: 🚀 DEV Deployment - Digital Ocean
 
 on:
-  workflow_run:
-    workflows: ["Terraform Deploy"]
-    types:
-      - completed
+  workflow_dispatch:  # Enables manual trigger
+    inputs:
+      action:  # Input to choose between apply, destroy, or specific actions
+        description: "Select the Terraform action to perform"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+concurrency:
+  group: DEV
+  cancel-in-progress: true
 
 jobs:
-  run-terraform:
+  deploy:
+    name: 🎉 Deploy
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Write SSH Key to Temporary File
-        run: |
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/private_key
-          chmod 600 /tmp/private_key
+      - name: Install Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 18.17.1
 
-      - name: Run Terraform Action
-        run: |
-          echo "Running action: ${ACTION}"
+      - name: Install Dependencies with Yarn
+        run: yarn install
 
-          case "${ACTION}" in
-            apply)
-              echo "Running terraform apply..."
-              terraform apply -auto-approve \
-                -var="ssh_public_key=${SSH_PUBLIC_KEY}" \
-                -var="ssh_private_key=${SSH_PRIVATE_KEY}" \
-                -var="droplet_ip=${DROPLET_IP}" || {
-                  echo "Terraform apply failed";
-                  exit 1;
-                }
-              ;;
-            destroy)
-              echo "Running terraform destroy..."
-              terraform destroy -auto-approve \
-                -var="ssh_public_key=${SSH_PUBLIC_KEY}" \
-                -var="ssh_private_key=${SSH_PRIVATE_KEY}" \
-                -var="droplet_ip=${DROPLET_IP}" || {
-                  echo "Terraform destroy failed";
-                  exit 1;
-                }
-              ;;
-            *)
-              echo "Invalid action. Exiting..."
-              exit 1
-              ;;
-          esac
-        shell: /usr/bin/bash
-        env:
-          ACTION: apply  # Change this to use an input or dynamic value if needed
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
-          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
-          SSH_PRIVATE_KEY: /tmp/private_key
-          DROPLET_IP: ${{ secrets.DROPLET_IP }}
+      - name: Build NestJS App
+        run: yarn build
 
-      - name: Create and Transfer 1.sh Script
+      - name: Create Deployment Script
         run: |
-          cat << 'EOF' > 1.sh
+          cat << 'EOF' > deploy.sh
           #!/bin/bash
+
+          # Configuration variables
           GIT_REPO="git@github.com:sumit-linearloop/digitalocean-api.git"
           BRANCH_NAME="DEV"
           WORK_DIR="/var/www/DEV"
 
+          # Create work directory if it doesn't exist
           mkdir -p "$WORK_DIR"
+
+          # Navigate to work directory
           cd "$WORK_DIR" || exit
 
+          # Check if directory is empty
           if [ "$(ls -A $WORK_DIR)" ]; then
               echo "Directory is not empty. Pulling latest changes..."
+              # Pull latest changes
               git pull origin "$BRANCH_NAME"
           else
               echo "Directory is empty. Cloning repository..."
+              # Clone repository
               git clone "$GIT_REPO" .
+              # Checkout specific branch
               git checkout "$BRANCH_NAME"
           fi
 
+          # Install dependencies and build
           echo "Installing dependencies and building..."
           yarn install
           yarn build
 
+          # Check if PM2 process exists
           if pm2 list | grep -q "DEV"; then
               echo "Restarting PM2 process..."
               pm2 restart "DEV"
@@ -91,14 +79,46 @@ jobs:
               pm2 start dist/main.js --name "DEV"
           fi
 
+          # Save PM2 configuration
           pm2 save
+
           echo "Deployment completed successfully!"
           EOF
+          chmod +x deploy.sh  # Make the script executable
 
       - name: Transfer Script to Droplet
-        run: |
-          scp -o StrictHostKeyChecking=no -i /tmp/private_key 1.sh root@${{ secrets.DROPLET_IP }}:/tmp/
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.STAG_SERVER_HOST }}
+          username: ${{ secrets.STAG_SERVER_USER }}
+          key: ${{ secrets.STAG_SERVER_KEY }}
+          source: 'deploy.sh'
+          target: '/tmp/deploy.sh'
 
-      - name: Run Script on Droplet
+      - name: Run Deployment Script on Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.STAG_SERVER_HOST }}
+          username: ${{ secrets.STAG_SERVER_USER }}
+          key: ${{ secrets.STAG_SERVER_KEY }}
+          port: ${{ secrets.STAG_SERVER_PORT }}
+          script: |
+            bash /tmp/deploy.sh
+
+      - name: Terraform Action
         run: |
-          ssh -o StrictHostKeyChecking=no -i /tmp/private_key root@${{ secrets.DROPLET_IP }} 'bash /tmp/1.sh'
+          echo "Selected action: ${{ github.event.inputs.action }}"
+          if [[ "${{ github.event.inputs.action }}" == "apply" ]]; then
+            echo "Running terraform apply..."
+            terraform apply -auto-approve
+          elif [[ "${{ github.event.inputs.action }}" == "destroy" ]]; then
+            echo "Running terraform destroy..."
+            terraform destroy -auto-approve
+          else
+            echo "Invalid action specified."
+            exit 1
+          fi
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
