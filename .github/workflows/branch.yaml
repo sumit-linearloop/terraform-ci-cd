@@ -16,12 +16,12 @@ jobs:
       - name: Set up Node.js (if needed)
         uses: actions/setup-node@v2
         with:
-          node-version: '14'  # or any other version
+          node-version: '18'  # or any other version
 
       - name: Run shell script
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}      # Pass the server IP as an environment variable
           SERVER_HOST: ${{ secrets.SERVER_HOST }}  # Pass the server hostname as an environment variable
         run: |
-          chmod +x ./terraform-ci-cd/deploy.sh  # Make the script executable
-          ./terraform-ci-cd/deploy.sh            # Execute the script
+          chmod +x ./deploy.sh
+          ./deploy.sh            # Execute the script
