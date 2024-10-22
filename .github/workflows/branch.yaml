@@ -18,10 +18,18 @@ jobs:
         with:
           node-version: '18'  # or any other version
 
+      - name: Add SSH key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
+          chmod 600 /tmp/id_rsa
+          eval "$(ssh-agent -s)"
+          ssh-add /tmp/id_rsa
+
       - name: Run shell script
         env:
-          SERVER_IP: ${{ secrets.SERVER_IP }}      # Pass the server IP as an environment variable
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}  # Pass the server hostname as an environment variable
+          SERVER_IP: 139.59.66.18     # Pass the server IP as an environment variable
+          SERVER_HOST: root  # Pass the server hostname as an environment variable
         run: |
-          chmod +x ./deploy.sh  # Make the script executable (ensure this is the correct path)
-          ./deploy.sh           # Execute the script
+          echo "Starting deployment process..."
+          chmod +x ./deploy.sh
+          ./deploy.sh
