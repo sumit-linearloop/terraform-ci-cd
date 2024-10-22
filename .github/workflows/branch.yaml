@@ -25,17 +25,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Install Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: 18.17.1
-
-      - name: Install Dependencies with Yarn
-        run: yarn install
-
-      - name: Build NestJS App
-        run: yarn build
-
       - name: Create Deployment Script
         run: |
           cat << 'EOF' > deploy.sh
@@ -104,21 +93,3 @@ jobs:
           port: ${{ secrets.STAG_SERVER_PORT }}
           script: |
             bash /tmp/deploy.sh
-
-      - name: Terraform Action
-        run: |
-          echo "Selected action: ${{ github.event.inputs.action }}"
-          if [[ "${{ github.event.inputs.action }}" == "apply" ]]; then
-            echo "Running terraform apply..."
-            terraform apply -auto-approve
-          elif [[ "${{ github.event.inputs.action }}" == "destroy" ]]; then
-            echo "Running terraform destroy..."
-            terraform destroy -auto-approve
-          else
-            echo "Invalid action specified."
-            exit 1
-          fi
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
