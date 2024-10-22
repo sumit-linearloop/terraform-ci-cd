@@ -14,14 +14,43 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Run Initial Setup Script
+      - name: Copy .env File to Droplet
         run: |
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} root@${{ secrets.DROPLET_PUBLIC_IP }} 'bash /tmp/initial_setup.sh'
-        env:
-          DROPLET_IP: ${{ secrets.DROPLET_PUBLIC_IP }}
+          echo "${{ secrets.ENV_CONTENT }}" > .env
+          scp -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} .env root@${{ secrets.DROPLET_IP }}:/var/www/DEV/.env
 
-      - name: Run App Setup Script
+      - name: Clone and Setup Repository on Droplet
         run: |
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} root@${{ secrets.DROPLET_PUBLIC_IP }} 'bash /tmp/app_setup.sh'
-        env:
-          DROPLET_IP: ${{ secrets.DROPLET_PUBLIC_IP }}
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} root@${{ secrets.DROPLET_IP }} << 'EOF'
+            set -e  # Exit on errors
+
+            # Define variables
+            REPO="git@github.com:sumit-linearloop/digitalocean-api.git"
+            BRANCH="DEV"
+            WORKDIR="/var/www/DEV"
+
+            # Create the working directory if it doesn't exist
+            mkdir -p $WORKDIR
+            cd $WORKDIR
+
+            # Clone the repo or pull latest changes if it already exists
+            if [ -d ".git" ]; then
+              echo "Repository exists. Pulling latest changes..."
+              git reset --hard  # Reset local changes
+              git checkout $BRANCH
+              git pull origin $BRANCH
+            else
+              echo "Cloning repository..."
+              git clone -b $BRANCH $REPO $WORKDIR
+              cd $WORKDIR
+            fi
+
+            # Install dependencies, build, and start the app
+            yarn install --frozen-lockfile
+            yarn build
+
+            # Restart the app using PM2
+            pm2 stop DEV || true  # Ignore errors if the process doesn't exist
+            pm2 start dist/main.js --name "DEV"
+            pm2 save
+EOF
