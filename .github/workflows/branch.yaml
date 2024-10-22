@@ -89,7 +89,7 @@ jobs:
         with:
           host: ${{ secrets.STAG_SERVER_HOST }}
           username: ${{ secrets.STAG_SERVER_USER }}
-          key: ${{ secrets.STAG_SERVER_PRIVATE_KEY }}  # Use the private key from secrets
+          key: ${{ secrets.STAG_SERVER_KEY }}
           port: ${{ secrets.STAG_SERVER_PORT }}
           script: |
             bash /tmp/deploy.sh
