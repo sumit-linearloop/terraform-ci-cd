@@ -16,7 +16,7 @@ jobs:
       - name: Set up Node.js (if needed)
         uses: actions/setup-node@v2
         with:
-          node-version: '14'  # or any other version
+          node-version: '18'  # or any other version
 
       - name: Run shell script
         env:
