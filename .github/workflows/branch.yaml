@@ -1,95 +1,27 @@
-name: 🚀 DEV Deployment - Digital Ocean
+name: CI/CD Pipeline
 
 on:
-  workflow_dispatch:  # Enables manual trigger
-    inputs:
-      action:  # Input to choose between apply, destroy, or specific actions
-        description: "Select the Terraform action to perform"
-        required: true
-        default: "apply"
-        type: choice
-        options:
-          - apply
-          - destroy
-
-concurrency:
-  group: DEV
-  cancel-in-progress: true
+  push:
+    branches:
+      - main
 
 jobs:
-  deploy:
-    name: 🎉 Deploy
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Create Deployment Script
+      - name: Set up Node.js (if needed)
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'  # or any other version
+
+      - name: Run shell script
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}      # Pass the server IP as an environment variable
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}  # Pass the server hostname as an environment variable
         run: |
-          cat << 'EOF' > deploy.sh
-          #!/bin/bash
-
-          # Configuration variables
-          GIT_REPO="git@github.com:sumit-linearloop/digitalocean-api.git"
-          BRANCH_NAME="DEV"
-          WORK_DIR="/var/www/DEV"
-
-          # Create work directory if it doesn't exist
-          mkdir -p "$WORK_DIR"
-
-          # Navigate to work directory
-          cd "$WORK_DIR" || exit
-
-          # Check if directory is empty
-          if [ "$(ls -A $WORK_DIR)" ]; then
-              echo "Directory is not empty. Pulling latest changes..."
-              # Pull latest changes
-              git pull origin "$BRANCH_NAME"
-          else
-              echo "Directory is empty. Cloning repository..."
-              # Clone repository
-              git clone "$GIT_REPO" .
-              # Checkout specific branch
-              git checkout "$BRANCH_NAME"
-          fi
-
-          # Install dependencies and build
-          echo "Installing dependencies and building..."
-          yarn install
-          yarn build
-
-          # Check if PM2 process exists
-          if pm2 list | grep -q "DEV"; then
-              echo "Restarting PM2 process..."
-              pm2 restart "DEV"
-          else
-              echo "Starting new PM2 process..."
-              pm2 start dist/main.js --name "DEV"
-          fi
-
-          # Save PM2 configuration
-          pm2 save
-
-          echo "Deployment completed successfully!"
-          EOF
-          chmod +x deploy.sh  # Make the script executable
-
-      - name: Transfer Script to Droplet
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.STAG_SERVER_HOST }}
-          username: ${{ secrets.STAG_SERVER_USER }}
-          key: ${{ secrets.STAG_SERVER_KEY }}
-          source: 'deploy.sh'
-          target: '/tmp/deploy.sh'
-
-      - name: Run Deployment Script on Server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.STAG_SERVER_HOST }}
-          username: ${{ secrets.STAG_SERVER_USER }}
-          key: ${{ secrets.STAG_SERVER_KEY }}
-          port: ${{ secrets.STAG_SERVER_PORT }}
-          script: |
-            bash /tmp/deploy.sh
+          chmod +x ./terraform-ci-cd/deploy.sh  # Make the script executable
+          ./terraform-ci-cd/deploy.sh            # Execute the script
