@@ -107,6 +107,12 @@ jobs:
                 exit 1;
               }
               ;;
+            *)
+              echo "Invalid action: ${{ github.event.inputs.action }}"
+              exit 1
+              ;;
+          esac
+
 
 
 
