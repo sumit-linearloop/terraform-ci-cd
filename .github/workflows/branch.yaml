@@ -1,108 +1,27 @@
-name: Terraform CI/CD Pipeline
+name: Run Scripts on Droplet
 
 on:
-  workflow_dispatch:  # Enables manual trigger
-    inputs:
-      action:  # Input to choose between apply or destroy
-        description: "Select the Terraform action to perform"
-        required: true
-        default: "apply"  # Default action if not specified
-        type: choice
-        options:
-          - apply
-          - destroy
+  workflow_run:
+    workflows: ["Terraform Deploy"]  # Trigger this after the Terraform Deploy workflow completes
+    types:
+      - completed
 
 jobs:
-  terraform:
+  run-scripts:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Download terraform.tfvars from S3
+      - name: Run Initial Setup Script
         run: |
-          aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform.tfvars || { 
-            echo "Failed to download terraform.tfvars"; 
-            exit 1; 
-          }
-
-      - name: Terraform Apply or Destroy
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} root@${{ secrets.DROPLET_PUBLIC_IP }} 'bash /tmp/initial_setup.sh'
         env:
-          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          DROPLET_IP: ${{ secrets.DROPLET_PUBLIC_IP }}
+
+      - name: Run App Setup Script
         run: |
-          # Initialize Terraform
-          terraform init || {
-            echo "Terraform init failed";
-            exit 1;
-          }
-
-          # Apply or destroy based on input action
-          if [ "${{ github.event.inputs.action }}" == "apply" ]; then
-            terraform apply -var="app_action=setup_dragonfly" -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -auto-approve || { 
-              echo "Terraform apply failed"; 
-              exit 1; 
-            }
-          elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
-            terraform destroy -var="app_action=destroy_dragonfly" -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -auto-approve || { 
-              echo "Terraform destroy failed"; 
-              exit 1; 
-            }
-          fi
-
-      # Step to build and start the application using PM2 on the same server
-      - name: Build and Start Application on Server
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} root@${{ secrets.DROPLET_PUBLIC_IP }} 'bash /tmp/app_setup.sh'
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          SERVER_IP: ${{ secrets.SERVER_IP }}  # Fetch server IP from secrets
-        run: |
-          # Set up SSH keys
-          echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/id_rsa
-
-          # Add the server to known hosts
-          echo "${SERVER_IP}" >> ~/.ssh/known_hosts
-
-          # Define the application directory
-          REPO_DIR="/var/www/dragonfly"  # Adjust as necessary for your server
-
-          # Clone and build the application on the server
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa user@"${SERVER_IP}" << 'EOF'
-            # Ensure Node.js and PM2 are installed
-            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # Load nvm
-            nvm install 18  # Install Node.js
-            nvm use 18
-            
-            # Clone the application repository if not already present
-            if [ ! -d "$REPO_DIR/.git" ]; then
-              git clone -b main git@github.com:sumit-linearloop/terraform-ci-cd.git "$REPO_DIR"
-            fi
-
-            cd "$REPO_DIR"
-            git checkout main  # Ensure we are on the main branch
-            git pull origin main  # Pull the latest changes from main
-
-            # Install dependencies
-            yarn install || { echo "Yarn install failed"; exit 1; }
-
-            # Build the project
-            yarn build || { echo "Build failed"; exit 1; }
-
-            # Start the application with PM2
-            pm2 start dist/main.js --name "dragonfly" -i 1 || { echo "PM2 start failed"; exit 1; }
-            pm2 save || { echo "PM2 save failed"; exit 1; }
-
-            echo "Application started successfully!"
-          EOF
+          DROPLET_IP: ${{ secrets.DROPLET_PUBLIC_IP }}
