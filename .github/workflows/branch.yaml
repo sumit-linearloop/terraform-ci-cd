@@ -1,56 +1,61 @@
-name: Run Scripts on Droplet
+name: Run Terraform Action
 
 on:
   workflow_run:
-    workflows: ["Terraform Deploy"]  # Trigger this after the Terraform Deploy workflow completes
+    workflows: ["Terraform Deploy"]  # Triggered after Terraform Deploy workflow completes
     types:
       - completed
 
 jobs:
-  run-scripts:
+  run-terraform:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Copy .env File to Droplet
+      - name: Run Initial Setup Script on Droplet
         run: |
-          echo "${{ secrets.ENV_CONTENT }}" > .env
-          scp -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} .env root@${{ secrets.DROPLET_IP }}:/var/www/DEV/.env
+          echo "Running initial setup script on Droplet..."
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} root@${{ secrets.DROPLET_IP }} \
+            'bash /tmp/1.sh'
 
-      - name: Clone and Setup Repository on Droplet
+      - name: Run Terraform Action
         run: |
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} root@${{ secrets.DROPLET_IP }} << 'EOF'
-            set -e  # Exit on errors
+          echo "Running action: apply"
 
-            # Define variables
-            REPO="git@github.com:sumit-linearloop/digitalocean-api.git"
-            BRANCH="DEV"
-            WORKDIR="/var/www/DEV"
-
-            # Create the working directory if it doesn't exist
-            mkdir -p $WORKDIR
-            cd $WORKDIR
-
-            # Clone the repo or pull latest changes if it already exists
-            if [ -d ".git" ]; then
-              echo "Repository exists. Pulling latest changes..."
-              git reset --hard  # Reset local changes
-              git checkout $BRANCH
-              git pull origin $BRANCH
-            else
-              echo "Cloning repository..."
-              git clone -b $BRANCH $REPO $WORKDIR
-              cd $WORKDIR
-            fi
-
-            # Install dependencies, build, and start the app
-            yarn install --frozen-lockfile
-            yarn build
-
-            # Restart the app using PM2
-            pm2 stop DEV || true  # Ignore errors if the process doesn't exist
-            pm2 start dist/main.js --name "DEV"
-            pm2 save
-EOF
+          case "apply" in
+            apply)
+              echo "Running terraform apply..."
+              terraform apply -auto-approve \
+                -var="ssh_public_key=${SSH_PUBLIC_KEY}" \
+                -var="ssh_private_key=${SSH_PRIVATE_KEY}" \
+                -var="droplet_ip=${DROPLET_IP}" || {
+                  echo "Terraform apply failed";
+                  exit 1;
+                }
+              ;;
+            destroy)
+              echo "Running terraform destroy..."
+              terraform destroy -auto-approve \
+                -var="ssh_public_key=${SSH_PUBLIC_KEY}" \
+                -var="ssh_private_key=${SSH_PRIVATE_KEY}" \
+                -var="droplet_ip=${DROPLET_IP}" || {
+                  echo "Terraform destroy failed";
+                  exit 1;
+                }
+              ;;
+            *)
+              echo "Invalid action: ${ACTION}. Exiting..."
+              exit 1
+              ;;
+          esac
+        shell: /usr/bin/bash -e {0}
+        env:
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          DROPLET_IP: ${{ secrets.DROPLET_IP }}
