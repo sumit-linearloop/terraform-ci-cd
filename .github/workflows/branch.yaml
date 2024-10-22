@@ -39,6 +39,13 @@ jobs:
           SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
+          # Initialize Terraform
+          terraform init || {
+            echo "Terraform init failed";
+            exit 1;
+          }
+
+          # Apply or destroy based on input action
           if [ "${{ github.event.inputs.action }}" == "apply" ]; then
             terraform apply -var="app_action=setup_dragonfly" -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -auto-approve || { 
               echo "Terraform apply failed"; 
