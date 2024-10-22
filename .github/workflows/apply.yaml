@@ -149,9 +149,8 @@ on:
         default: "dev"
         type: choice
         options:
-          - dev
-          - staging
-          - prod
+          - main
+          - DEV
 
 env:
   TF_IN_AUTOMATION: "true"
