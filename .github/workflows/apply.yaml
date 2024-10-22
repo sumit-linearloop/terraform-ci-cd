@@ -109,23 +109,7 @@ jobs:
                 exit 1;
               }
               ;;
-            setup_dragonfly)
-              terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -var="app_action=setup_dragonfly" || {
-                echo "Terraform apply for setup_dragonfly failed";
-                exit 1;
-              }
-              ;;
-            destroy_dragonfly)
-              terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -var="app_action=destroy_dragonfly" || {
-                echo "Terraform apply for destroy_dragonfly failed";
-                exit 1;
-              }
-              ;;
-            *)
-              echo "Invalid action specified";
-              exit 1;
-              ;;
-          esac
+
 
 
 
