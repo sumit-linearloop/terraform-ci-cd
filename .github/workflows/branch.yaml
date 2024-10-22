@@ -2,7 +2,7 @@ name: Run Terraform and Setup App
 
 on:
   workflow_run:
-    workflows: ["Terraform Deploy"]  # Trigger after the Terraform Deploy completes
+    workflows: ["Terraform Deploy"]
     types:
       - completed
 
@@ -40,59 +40,16 @@ jobs:
                 }
               ;;
             *)
-              echo "Invalid action: ${ACTION}. Exiting..."
+              echo "Invalid action. Exiting..."
               exit 1
               ;;
           esac
         shell: /usr/bin/bash -e {0}
         env:
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           DROPLET_IP: ${{ secrets.DROPLET_IP }}
-
-      - name: Create and Transfer 1.sh Script
-        run: |
-          cat << 'EOF' > 1.sh
-          #!/bin/bash
-          GIT_REPO="git@github.com:sumit-linearloop/digitalocean-api.git"
-          BRANCH_NAME="DEV"
-          WORK_DIR="/var/www/DEV"
-
-          mkdir -p "$WORK_DIR"
-          cd "$WORK_DIR" || exit
-
-          if [ "$(ls -A $WORK_DIR)" ]; then
-              echo "Directory is not empty. Pulling latest changes..."
-              git pull origin "$BRANCH_NAME"
-          else
-              echo "Directory is empty. Cloning repository..."
-              git clone "$GIT_REPO" .
-              git checkout "$BRANCH_NAME"
-          fi
-
-          echo "Installing dependencies and building..."
-          yarn install
-          yarn build
-
-          if pm2 list | grep -q "DEV"; then
-              echo "Restarting PM2 process..."
-              pm2 restart "DEV"
-          else
-              echo "Starting new PM2 process..."
-              pm2 start dist/main.js --name "DEV"
-          fi
-
-          pm2 save
-          echo "Deployment completed successfully!"
-          EOF
-
-      - name: Transfer Script to Droplet
-        run: |
-          scp -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} 1.sh root@${{ secrets.DROPLET_IP }}:/tmp/
-
-      - name: Run Script on Droplet
-        run: |
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} root@${{ secrets.DROPLET_IP }} 'bash /tmp/1.sh'
