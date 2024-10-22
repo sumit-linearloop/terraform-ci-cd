@@ -25,6 +25,10 @@ jobs:
           eval "$(ssh-agent -s)"
           ssh-add /tmp/id_rsa
 
+      - name: Test SSH connection to GitHub
+        run: |
+          ssh -T git@github.com || echo "SSH connection failed"
+
       - name: Run shell script
         env:
           SERVER_IP: 139.59.66.18     # Pass the server IP as an environment variable
