@@ -47,12 +47,93 @@
 
 
 
+# name: Terraform CI/CD Pipeline
+
+# on:
+#   workflow_dispatch:  # Enables manual trigger
+#     inputs:
+#       action:  # Input to choose between apply, destroy, or specific actions
+#         description: "Select the Terraform action to perform"
+#         required: true
+#         default: "apply"
+#         type: choice
+#         options:
+#           - apply
+#           - destroy
+#           - setup_dragonfly
+#           - destroy_dragonfly
+
+# jobs:
+#   terraform:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v2
+
+#       - name: Configure AWS credentials
+#         uses: aws-actions/configure-aws-credentials@v1
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+#           aws-region: ${{ secrets.AWS_REGION }}
+
+#       - name: Download terraform.tfvars from S3
+#         run: |
+#           aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform.tfvars || { 
+#             echo "Failed to download terraform.tfvars"; 
+#             exit 1; 
+#           }
+
+#       - name: Terraform Init
+#         run: |
+#           terraform init || { echo "Terraform init failed"; exit 1; }
+
+#       - name: Terraform Action  # Dynamically choose the action based on input
+#         env:
+#           SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+#           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+#         run: |
+#           case "${{ github.event.inputs.action }}" in
+#             apply)
+#               terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" || { 
+#                 echo "Terraform apply failed"; 
+#                 exit 1; 
+#               }
+#               ;;
+#             destroy)
+#               terraform destroy -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" || { 
+#                 echo "Terraform destroy failed"; 
+#                 exit 1; 
+#               }
+#               ;;
+#             setup_dragonfly)
+#               terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -var="app_action=setup_dragonfly" || { 
+#                 echo "Terraform apply for setup_dragonfly failed"; 
+#                 exit 1; 
+#               }
+#               ;;
+#             destroy_dragonfly)
+#               terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -var="app_action=destroy_dragonfly" || { 
+#                 echo "Terraform apply for destroy_dragonfly failed"; 
+#                 exit 1; 
+#               }
+#               ;;
+#             *)
+#               echo "Invalid action specified"; 
+#               exit 1;
+#               ;;
+#           esac
+
+
+
+
 name: Terraform CI/CD Pipeline
 
 on:
-  workflow_dispatch:  # Enables manual trigger
+  workflow_dispatch:
     inputs:
-      action:  # Input to choose between apply, destroy, or specific actions
+      action:
         description: "Select the Terraform action to perform"
         required: true
         default: "apply"
@@ -62,17 +143,45 @@ on:
           - destroy
           - setup_dragonfly
           - destroy_dragonfly
+      environment:
+        description: "Select the environment"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TERRAFORM_VERSION: "1.5.7"
+  S3_BUCKET: "sumit-cli"
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
+    concurrency:
+      group: terraform-${{ github.event.inputs.environment }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
@@ -80,48 +189,83 @@ jobs:
 
       - name: Download terraform.tfvars from S3
         run: |
-          aws s3 cp s3://sumit-cli/terraform.tfvars ./terraform.tfvars || { 
-            echo "Failed to download terraform.tfvars"; 
-            exit 1; 
+          echo "Downloading terraform.tfvars from S3..."
+          aws s3 cp "s3://${S3_BUCKET}/terraform.tfvars" ./terraform.tfvars || {
+            echo "::error::Failed to download terraform.tfvars from S3"
+            exit 1
           }
 
-      - name: Terraform Init
-        run: |
-          terraform init || { echo "Terraform init failed"; exit 1; }
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        continue-on-error: true
 
-      - name: Terraform Action  # Dynamically choose the action based on input
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform init -input=false || {
+            echo "::error::Terraform init failed"
+            exit 1
+          }
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan \
+            -input=false \
+            -var="ssh_public_key=${SSH_PUBLIC_KEY}" \
+            -var="ssh_private_key=${SSH_PRIVATE_KEY}" \
+            ${{ github.event.inputs.action == 'setup_dragonfly' && '-var="app_action=setup_dragonfly"' || '' }} \
+            ${{ github.event.inputs.action == 'destroy_dragonfly' && '-var="app_action=destroy_dragonfly"' || '' }} \
+            -out=tfplan || {
+              echo "::error::Terraform plan failed"
+              exit 1
+            }
+        env:
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Terraform Action
+        id: apply
         env:
           SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           case "${{ github.event.inputs.action }}" in
-            apply)
-              terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" || { 
-                echo "Terraform apply failed"; 
-                exit 1; 
+            apply|setup_dragonfly|destroy_dragonfly)
+              echo "Applying Terraform changes..."
+              terraform apply -auto-approve tfplan || {
+                echo "::error::Terraform apply failed"
+                exit 1
               }
               ;;
             destroy)
-              terraform destroy -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" || { 
-                echo "Terraform destroy failed"; 
-                exit 1; 
-              }
-              ;;
-            setup_dragonfly)
-              terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -var="app_action=setup_dragonfly" || { 
-                echo "Terraform apply for setup_dragonfly failed"; 
-                exit 1; 
-              }
-              ;;
-            destroy_dragonfly)
-              terraform apply -auto-approve -var="ssh_public_key=${SSH_PUBLIC_KEY}" -var="ssh_private_key=${SSH_PRIVATE_KEY}" -var="app_action=destroy_dragonfly" || { 
-                echo "Terraform apply for destroy_dragonfly failed"; 
-                exit 1; 
+              echo "Destroying infrastructure..."
+              terraform destroy -auto-approve \
+                -var="ssh_public_key=${SSH_PUBLIC_KEY}" \
+                -var="ssh_private_key=${SSH_PRIVATE_KEY}" || {
+                echo "::error::Terraform destroy failed"
+                exit 1
               }
               ;;
             *)
-              echo "Invalid action specified"; 
-              exit 1;
+              echo "::error::Invalid action specified: ${{ github.event.inputs.action }}"
+              exit 1
               ;;
           esac
 
+      - name: Cleanup Sensitive Files
+        if: always()
+        run: |
+          rm -f terraform.tfvars
+          rm -f tfplan
+          rm -f .terraform.lock.hcl
+
+      - name: Upload Terraform Plan
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: terraform-plan-${{ github.event.inputs.environment }}
+          path: |
+            *.log
+            *.txt
+          retention-days: 5
